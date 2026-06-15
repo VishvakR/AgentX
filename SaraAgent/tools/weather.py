@@ -81,11 +81,13 @@ class WeatherTool(Tool):
                     "count": 1,
                     "language": "en",
                     "format": "json",
+                    "days": days,
+                    "current": current
+                    
                 },
             )
             geo_resp.raise_for_status()
             geo_data = geo_resp.json()
-            print(geo_data)
             results = geo_data.get("results") or []
             if not results:
                 return f"Error: could not find location '{location}'"
@@ -102,7 +104,6 @@ class WeatherTool(Tool):
                 ]
                 if part
             )
-            print(place_name)
             params: dict[str, Any] = {
                 "latitude": lat,
                 "longitude": lon,
@@ -129,7 +130,6 @@ class WeatherTool(Tool):
             weather_resp = await client.get(weather_url, params=params)
             weather_resp.raise_for_status()
             data = weather_resp.json()
-            print(data)
 
             # 3) format result
             lines: list[str] = [f"Weather for {place_name}"]
