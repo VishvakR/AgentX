@@ -68,3 +68,8 @@ class LLMProvider(ABC):
         tool_choice: str | dict[str, Any] | None = None,
     ) -> LLMResponse:
         pass
+
+    @abstractmethod
+    def get_default_model(self) -> str:
+        """Get the default model for this provider."""
+        pass
