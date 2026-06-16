@@ -1,6 +1,6 @@
 from typing import Any
 
-from SaraAgent.tools.base import Tool
+from AgentX.tools.base import Tool
 
 class ToolRegistry:
     """
