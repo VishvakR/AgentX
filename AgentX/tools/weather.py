@@ -2,9 +2,9 @@ from abc import ABC
 import httpx
 from typing import Any
 
-# from SaraAgent.tools.registry import ToolRegistry
-from SaraAgent.tools.base import Tool, tool_parameters
-from SaraAgent.config.schema import Base
+# from AgentX.tools.registry import ToolRegistry
+from AgentX.tools.base import Tool, tool_parameters
+from AgentX.config.schema import Base
 
 class WeatherConfig(Base):
     provider: str = "openmeteo"
