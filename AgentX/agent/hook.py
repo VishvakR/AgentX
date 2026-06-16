@@ -1,7 +1,7 @@
 from dataclasses import dataclass, field
 from typing import Any
 
-from SaraAgent.providers import LLMResponse, ToolCallRequest
+from AgentX.providers import LLMResponse, ToolCallRequest
 
 @dataclass(slots=True)
 class AgentHookContext:
