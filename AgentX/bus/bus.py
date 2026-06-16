@@ -2,7 +2,7 @@
 
 import asyncio
 
-from SaraAgent.bus.messages import InboundMessage, OutboundMessage
+from AgentX.bus.messages import InboundMessage, OutboundMessage
 
 class MessageBus:
     """
