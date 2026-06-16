@@ -8,10 +8,10 @@ from loguru import logger
 from contextlib import suppress
 
 
-from SaraAgent.providers import LLMProvider, LLMResponse, ToolCallRequest
-from SaraAgent.agent.hook import AgentHookContext
-from SaraAgent.tools.registry import ToolRegistry
-from SaraAgent.utils.helpers import build_assistant_message, truncate_text
+from AgentX.providers import LLMProvider, LLMResponse, ToolCallRequest
+from AgentX.agent.hook import AgentHookContext
+from AgentX.tools.registry import ToolRegistry
+from AgentX.utils.helpers import build_assistant_message, truncate_text
 
 _DEFAULT_ERROR_MESSAGE = "Sorry, I encountered an error calling the AI model."
 _MAX_LENGTH_RECOVERIES = 3
