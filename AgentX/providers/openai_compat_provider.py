@@ -4,7 +4,7 @@ import json
 from urllib.parse import urlparse
 from typing import TYPE_CHECKING, Any, Awaitable, Callable
 
-from SaraAgent.providers import LLMProvider, LLMResponse, ProviderSpec, ToolCallRequest
+from AgentX.providers import LLMProvider, LLMResponse, ProviderSpec, ToolCallRequest
 
 
 if TYPE_CHECKING:
