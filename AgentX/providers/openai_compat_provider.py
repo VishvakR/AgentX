@@ -370,6 +370,10 @@ class OpenaiCompactProvider(LLMProvider):
                 finish_reason="error",
                 error_kind="timeout",
             )
+        
+
+    def get_default_model(self) -> str:
+        return self.default_model
 
 
 
