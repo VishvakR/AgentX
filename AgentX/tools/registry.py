@@ -1,4 +1,5 @@
 from typing import Any
+from loguru import logger
 
 from AgentX.tools.base import Tool
 
@@ -55,7 +56,7 @@ class ToolRegistry:
         mcp_tools: list[dict[str, Any]] = []
         for schema in definitions:
             name = self._schema_name(schema)
-            print(f"Registering tool schema: {name}")
+            logger.debug("Registering tool schema: {}", name)
             if name.startswith("mcp_"):
                 mcp_tools.append(schema)
             else:
@@ -69,7 +70,7 @@ class ToolRegistry:
     def prepare_call(
             self,
             name: str,
-            params: dict[str: Any]
+            params: dict[str, Any]
         ) -> tuple[Tool | None, dict[str, Any], str | None]:
 
         if not isinstance(params, dict) and name in ("read_file" , 'write_file'): #only for file system tool calling
