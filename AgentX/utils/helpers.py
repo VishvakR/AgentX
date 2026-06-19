@@ -1,4 +1,5 @@
 from typing import Any
+from pathlib import Path
 
 def build_assistant_message(
     content: str | None,
@@ -21,3 +22,15 @@ def truncate_text(text: str, max_chars: int) -> str:
     if max_chars <= 0 or len(text) <= max_chars:
         return text
     return text[:max_chars] + "\n... (truncated)"
+
+def sync_workspace_templates(workspace: Path, silent: bool = False) -> list[str]:
+    """Sync bundled templates to workspace. Creates missing files without overwriting user files."""
+    from importlib.resources import files
+
+    try:
+        tpl = files("AgentX") / "templates"
+    except Exception:
+        return []
+    if not tpl.is_dir():
+        return []
+
