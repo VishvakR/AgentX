@@ -1,5 +1,6 @@
 from typing import Any
 from pathlib import Path
+import shutil
 
 def build_assistant_message(
     content: str | None,
@@ -27,10 +28,17 @@ def sync_workspace_templates(workspace: Path, silent: bool = False) -> list[str]
     """Sync bundled templates to workspace. Creates missing files without overwriting user files."""
     from importlib.resources import files
 
-    try:
-        tpl = files("AgentX") / "templates"
-    except Exception:
-        return []
-    if not tpl.is_dir():
-        return []
+    workspace = Path(workspace).expanduser()
+    workspace.mkdir(parents=True, exist_ok=True)
+
+    templates = files("AgentX") / "templates"
+
+    added = []
+
+    for src in templates.iterdir():
+        if src.is_file():
+            dest = workspace / src.name
+
+            if not dest.exists():
+                shutil.copy2(src, dest)
 
