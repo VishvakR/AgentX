@@ -38,7 +38,8 @@ class LLMResponse:
     finish_reason: str = "stop"
     usage: dict[str, int] = field(default_factory=dict) # not yet implemented
     reasoning_content: str | None = None
-    thinking_blocks: list[dict] | None = None 
+    thinking_blocks: list[dict] | None = None
+    error_kind: str | None = None
 
     @property
     def has_tool_calls(self) -> bool:
