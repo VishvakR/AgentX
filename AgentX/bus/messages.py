@@ -12,6 +12,7 @@ class InboundMessage:
     chat_id: str    # Unique identifier for the chat or conversation
     sender_id: str  # User identifier
     content: str    # Message content
+    media: list[str] = field(default_factory=list)  # Attached media URLs/paths
     timestamp: datetime = field(default_factory=datetime.now)
     metadata: dict[str, Any] = field(default_factory=dict)
     session_key_override: str | None = None # Optional override for session key
