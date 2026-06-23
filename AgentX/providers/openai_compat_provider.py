@@ -3,8 +3,10 @@ import asyncio
 import json
 from urllib.parse import urlparse
 from typing import TYPE_CHECKING, Any, Awaitable, Callable
+from loguru import logger
 
-from AgentX.providers import LLMProvider, LLMResponse, ProviderSpec, ToolCallRequest
+from AgentX.providers.base import LLMProvider, LLMResponse, ToolCallRequest
+from AgentX.providers.registry import ProviderSpec
 
 
 if TYPE_CHECKING:
@@ -33,6 +35,7 @@ def _is_local_endpoint(spec: ProviderSpec | None, base_url: str | None) -> bool:
         return True
     if not host:
         return False
+    return False
 
 class OpenaiCompactProvider(LLMProvider):
     def __init__(
@@ -185,6 +188,7 @@ class OpenaiCompactProvider(LLMProvider):
             }
         else:
             return {}
+        return result
     
     @classmethod
     def _parse_chunks(cls, chunks: list[Any]) -> LLMResponse:
@@ -236,7 +240,7 @@ class OpenaiCompactProvider(LLMProvider):
 
             chunk_map = cls._maybe_mapping(chunk)
             if not chunk_map:
-                print("if not chunk_map")
+                logger.debug("Empty chunk_map encountered")
 
             if not chunk.choices:
                 usage = cls._extract_usage(chunk) or usage
