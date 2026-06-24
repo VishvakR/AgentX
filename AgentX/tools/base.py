@@ -12,19 +12,13 @@ _JSON_TYPE_MAP: dict[str, type | tuple[type, ...]] = {
 }
 
 class Schema(ABC):
-    """Abstract base for JSON Schema fragments describing tool parameters.
-
-    Concrete types live in :mod:`nanobot.agent.tools.schema`; all implement
-    :meth:`to_json_schema` and :meth:`validate_value`. Class methods
-    :meth:`validate_json_schema_value` and :meth:`fragment` are the shared validation and normalization entry points.
-    """
 
     @staticmethod
     def resolve_json_schema_type(t: Any) -> str | None:
         """Resolve the non-null type name from JSON Schema ``type`` (e.g. ``['string','null']`` -> ``'string'``)."""
         if isinstance(t, list):
             return next((x for x in t if x != "null"), None)
-        return t  # type: ignore[return-value]
+        return t
     
     @staticmethod
     def subpath(path: str, key: str) -> str:
@@ -89,7 +83,6 @@ class Schema(ABC):
         return errors
 
 class Tool(ABC):
-
     """
     Registry for agent tools.
 
@@ -98,10 +91,6 @@ class Tool(ABC):
     _TYPE_MAP = _JSON_TYPE_MAP
     _BOOL_TRUE = frozenset(("true", "1", "yes"))
     _BOOL_FALSE = frozenset(("false", "0", "no"))
-
-    def __init__(self):
-        self._tools: dict[str, Tool] = {}
-        self._cached_definitions: list[dict[str, Any]] | None = None
 
     @staticmethod
     def _resolve_type(t: Any) -> str | None:
