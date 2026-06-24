@@ -108,7 +108,7 @@ class WeatherTool(Tool):
                 "latitude": lat,
                 "longitude": lon,
                 "timezone": "auto",
-                "forecast_days": 1,
+                "forecast_days": days,
                 "daily": [
                     "temperature_2m_max",
                     "temperature_2m_min",
@@ -116,14 +116,14 @@ class WeatherTool(Tool):
                 ],
             }
 
-            if "matrix" == "imperial":
+            if units == "imperial":
                 params["temperature_unit"] = "fahrenheit"
                 params["windspeed_unit"] = "mph"
             else:
                 params["temperature_unit"] = "celsius"
                 params["windspeed_unit"] = "kmh"
 
-            if True:
+            if current:
                 params["current_weather"] = True
 
             weather_url = f"https://api.open-meteo.com/v1/forecast"
