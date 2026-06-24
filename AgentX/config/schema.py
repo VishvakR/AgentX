@@ -18,8 +18,10 @@ class AgentDefaults(Base):
     model: str = "qwen3.5:4b-mlx"
     max_tool_iterations: int = 200
     max_tool_result_chars: int = 16_000
-    bot_name: str = "nanobot"  # Display name shown in CLI prompts (e.g. "{name} is thinking...")
-    bot_icon: str = ""
+    session_dir: str = "~/.AgentX/sessions"
+    max_history_messages: int = 50
+    bot_name: str = "Sara"  # Display name shown in CLI prompts (e.g. "{name} is thinking...")
+    bot_icon: str = "☺️"
 
 class AgentsConfig(Base):
     """Agent configuration."""
