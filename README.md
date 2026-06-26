@@ -401,5 +401,5 @@ This project is licensed under the [MIT License](LICENSE).
 ---
 
 <p align="center">
-  <sub>Built with ❤️ by the AgentX community</sub>
+  <sub>Built with ❤️ by the Vishvak R</sub>
 </p>
