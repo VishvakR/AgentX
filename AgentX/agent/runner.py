@@ -1,7 +1,7 @@
 from __future__ import annotations
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import Any, Awaitable, Callable
 import os
 import asyncio
 from loguru import logger
@@ -34,6 +34,10 @@ class AgentRunSpec:
     concurrent_tools: bool = False
     stream_progress_deltas: bool = True
     llm_timeout_s: float | None = None
+    on_stream: Callable[[str], Awaitable[None]] | None = None
+    on_stream_end: Callable[..., Awaitable[None]] | None = None
+    on_think: Callable[[str], Awaitable[None]] | None = None
+    on_think_end: Callable[..., Awaitable[None]] | None = None
 
 @dataclass(slots=True)
 class AgentRunResult:
@@ -64,6 +68,7 @@ class AgentRunner:
         stop_reason = "completed"
         tool_events: list[dict[str, str]] = []
 
+        length_recovery_count = 0
         for iteration in range(spec.max_iterations):
             context = AgentHookContext(iteration=iteration, messages=messages)
             response = await self._request_model(spec, messages)
@@ -71,6 +76,15 @@ class AgentRunner:
             context.response = response
             context.tool_calls = list(response.tool_calls)
             self._accumulate_usage(usage, raw_usage)
+
+            # Signal end of this streaming round.
+            # resuming=True if the runner will make another LLM call.
+            will_continue = response.should_execute_tools or (
+                response.finish_reason == "length"
+                and length_recovery_count < _MAX_LENGTH_RECOVERIES
+            )
+            if spec.on_stream_end is not None:
+                await spec.on_stream_end(resuming=will_continue)
 
             if response.should_execute_tools:
                 context.tool_calls = list(response.tool_calls)
@@ -90,7 +104,7 @@ class AgentRunner:
                         response.tool_calls,
                     )
                 
-                print(results, new_events, fatal_error)
+                logger.debug("Tool results: {} events: {} fatal: {}", results, new_events, fatal_error)
                 tool_events.extend(new_events)
                 context.tool_results = list(results)
                 context.tool_events = list(new_events)
@@ -141,7 +155,7 @@ class AgentRunner:
                     # if hook.wants_streaming():
                     #     await hook.on_stream_end(context, resuming=True)
                     messages.append(build_assistant_message(
-                        result,
+                        response.content,
                         reasoning_content=response.reasoning_content,
                         thinking_blocks=response.thinking_blocks,
                     ))
@@ -152,18 +166,18 @@ class AgentRunner:
             assistant_message: dict[str, Any] | None = None
             if response.finish_reason != "error":
                 assistant_message = build_assistant_message(
-                    result,
+                    response.content,
                     reasoning_content=response.reasoning_content,
                     thinking_blocks=response.thinking_blocks,
                 )
 
             messages.append(assistant_message or build_assistant_message(
-                result,
+                response.content,
                 reasoning_content=response.reasoning_content,
                 thinking_blocks=response.thinking_blocks,
             ))
 
-            final_content = result
+            final_content = response.content
             context.final_content = final_content
             context.stop_reason = stop_reason
             break
@@ -180,7 +194,7 @@ class AgentRunner:
                 #     strip=True,
                 #     max_iterations=spec.max_iterations,
                 # )
-                print("need to add max iteration msg")
+                logger.warning("Max iterations reached ({}), no custom message set", spec.max_iterations)
 
             self._append_final_message(messages, final_content)
 
@@ -230,8 +244,8 @@ class AgentRunner:
         if timeout_s is None:
             # Default to a finite timeout to avoid per-session lock starvation when an LLM
             # request hangs indefinitely (e.g. gateway/network stall).
-            # Set NANOBOT_LLM_TIMEOUT_S=0 to disable.
-            raw = os.environ.get("NANOBOT_LLM_TIMEOUT_S", "300").strip()
+            # Set AGENTX_LLM_TIMEOUT_S=0 to disable.
+            raw = os.environ.get("AGENTX_LLM_TIMEOUT_S", "300").strip()
             try:
                 timeout_s = float(raw)
             except (TypeError, ValueError):
@@ -247,13 +261,24 @@ class AgentRunner:
         logger.info("Started Thinking by LLM")
 
         if wants_streaming:
-            async def on_stream(delta: str) -> None:
-                print(delta, end="")
-
+            # Use the caller-provided stream callback, or fall back to stdout.
+            _external_on_stream = spec.on_stream
 
             async def _stream(delta: str) -> None:
-                await on_stream(delta)
-        
+                if _external_on_stream is not None:
+                    await _external_on_stream(delta)
+                else:
+                    print(delta, end="", flush=True)
+
+            # async def _thinking(delta: str):
+            #     _external_on_think = spec.on_think
+            #     if not delta:
+            #         return
+            #     if _external_on_think is not None:
+            #         await _external_on_think(delta)
+            #     else:
+            #         print(delta, end="", flush=True)
+
             coro = self.provider.chat_stream(
                 **kwargs,
                 on_content_delta=_stream,
