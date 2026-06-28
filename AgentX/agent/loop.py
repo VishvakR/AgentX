@@ -408,11 +408,6 @@ class AgentCoreLoop:
         if ctx.session is None:
             return "ok"
 
-        # Extract only the NEW messages produced during this turn.
-        # ctx.all_messages = [system, ...history, user, ...new_from_runner]
-        # We want everything after the history we injected.
-        # The initial_messages count = 1 (system) + len(history) + 1 (new user)
-        # But the runner may have modified messages, so we diff by length.
         history_len = len(ctx.history)
         # initial_messages = system + history + user_message
         # The runner starts from initial_messages and appends.

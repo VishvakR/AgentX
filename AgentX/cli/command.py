@@ -19,6 +19,7 @@ from AgentX.providers import OpenaiCompactProvider, ProviderSpec
 from AgentX.cli.banner import banner
 from AgentX.tools.registry import ToolRegistry
 from AgentX.tools.weather import WeatherTool
+from AgentX.tools.web import WebSearchTool
 from AgentX.agent.loop import AgentCoreLoop
 from AgentX.bus import MessageBus, InboundMessage
 from AgentX.utils.helpers import sync_workspace_templates
@@ -87,6 +88,7 @@ def _build_provider(defaults: AgentDefaults) -> OpenaiCompactProvider:
 def _build_tools() -> ToolRegistry:
     registry = ToolRegistry()
     registry.register(WeatherTool())
+    registry.register(WebSearchTool())
     return registry
 
 
