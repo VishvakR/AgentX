@@ -75,13 +75,13 @@ class OpenaiCompactProvider(LLMProvider):
         if self._is_local:
             http_client = httpx.AsyncClient(
                 limits=httpx.Limits(keepalive_expiry=0),
-                timeout=160,
+                timeout=300,
             )
         self._client = AsyncOpenAI(
             api_key=self._api_key_for_client,
             base_url=self._effective_base,
             max_retries=0,
-            timeout=160,
+            timeout=300,
             http_client=http_client,
         )
     
