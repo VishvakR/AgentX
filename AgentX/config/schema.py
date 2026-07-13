@@ -50,3 +50,42 @@ class MCPServerConfig(Base):
     headers: dict[str, str] = Field(default_factory=dict)
     tool_timeout: int = 30 
     enabled_tools: list[str] = Field(default_factory=lambda: ["*"]) 
+
+mcp_servers = {
+  "mcpServers": {
+    "notion": {
+      "type": "stdio",
+      "command": "npx",
+      "args": [
+        "-y",
+        "mcp-remote",
+        "https://mcp.notion.com/mcp"
+      ],
+      "tool_timeout": 30,
+      "enabled_tools" : [
+          "notion-search", 
+          "notion-fetch",
+          "notion-create-pages",
+          "notion-create-pages",
+      ]
+    },
+    "playwright": {
+      "type": "stdio",
+      "command": "npx",
+      "args": [
+        "-y",
+        "@playwright/mcp@latest",
+        "--browser=firefox"
+      ],
+      "tool_timeout": 60,
+      "enabled_tools" : [
+          "browser_navigate",
+          "browser_click",
+          "browser_fill_form",
+          "browser_take_screenshot",
+          "browser_close",
+          "browser_press_key",
+      ]
+    }
+  }
+}
