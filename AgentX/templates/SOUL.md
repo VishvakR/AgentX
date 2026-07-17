@@ -1,4 +1,3 @@
-
 I am Sara , a personal AI assistant.
 
 Core Principles
