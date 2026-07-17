@@ -21,6 +21,8 @@ def _normalize_stdio_command(
     normalized_args = list(args or [])
     if os.name != 'nt':
         return command, normalized_args, env
+    # Windows: no special normalization needed yet.
+    return command, normalized_args, env
     
 def _extract_nullable_branch(options: Any) -> tuple[dict[str, Any], bool] | None:
     """Return the single non-null branch for nullable unions."""
@@ -111,45 +113,40 @@ class MCPToolWrapper(_MCPBaseWrapper):
         return self._parameters
 
     async def execute(self, **kwargs: Any) -> str:
-        while True:
-            try:
-                result = await asyncio.wait_for(
-                    self._session.call_tool(self._original_name, arguments=kwargs),
-                    timeout=self._tool_timeout,
-                )
-            except asyncio.TimeoutError:
-                logger.warning(
-                    "MCP tool '{}' timed out after {}s", self._name, self._tool_timeout
-                )
-                return f"(MCP tool call timed out after {self._tool_timeout}s)"
-            except asyncio.CancelledError:
-                task = asyncio.current_task()
-                if task is not None and task.cancelling() > 0:
-                    raise
-                logger.warning("MCP tool '{}' was cancelled by server/SDK", self._name)
-                return "(MCP tool call was cancelled)"
-            except Exception as exc:
-                logger.exception(
-                    "MCP tool '{}' failed after retry: {}",
-                    self._name,
-                    type(exc).__name__,
-                )
-                return f"(MCP tool call failed after retry: {type(exc).__name__})"
+        try:
+            result = await asyncio.wait_for(
+                self._session.call_tool(self._original_name, arguments=kwargs),
+                timeout=self._tool_timeout,
+            )
+        except asyncio.TimeoutError:
+            logger.warning(
+                "MCP tool '{}' timed out after {}s", self._name, self._tool_timeout
+            )
+            return f"(MCP tool call timed out after {self._tool_timeout}s)"
+        except asyncio.CancelledError:
+            task = asyncio.current_task()
+            if task is not None and task.cancelling() > 0:
+                raise
+            logger.warning("MCP tool '{}' was cancelled by server/SDK", self._name)
+            return "(MCP tool call was cancelled)"
+        except Exception as exc:
+            logger.exception(
+                "MCP tool '{}' failed: {}",
+                self._name,
+                type(exc).__name__,
+            )
+            return f"(MCP tool call failed: {type(exc).__name__})"
+
+        if not result.content:
+            return ""
+
+        parts: list[str] = []
+        for item in result.content:
+            if hasattr(item, "text"):
+                parts.append(item.text)
             else:
-                if not result.content:
-                    return ""
-
-                parts: list[str] = []
-
-                for item in result.content:
-                    # Most common case: TextContent
-                    if hasattr(item, "text"):
-                        parts.append(item.text)
-                    else:
-                        # Fallback for other content types
-                        parts.append(str(item))
-                return "\n".join(parts)
-        return "(MCP tool call failed)"
+                parts.append(str(item))
+        return "\n".join(parts)
 
             
 
@@ -177,9 +174,6 @@ async def connect_mcp_servers(mcp_servers: dict, registry: ToolRegistry):
                     # await server_stack.aclose()
                     return name, None
                 
-            if transport_type in {"sse", "streamableHttp"}:
-                #need to implement
-                pass
             if transport_type == "stdio":
                 command, args, env = _normalize_stdio_command(
                     cfg.command, cfg.args, cfg.env or None
@@ -192,12 +186,13 @@ async def connect_mcp_servers(mcp_servers: dict, registry: ToolRegistry):
                  )
                 read, write = await server_stack.enter_async_context(stdio_client(params))
             elif transport_type == "sse":
-                # Yet to implement
-                pass
+                logger.warning("MCP server '{}': SSE transport not yet implemented, skipping", name)
+                await server_stack.aclose()
+                return name, None
             elif transport_type == "streamableHttp":
-                # yet to implement
-                pass
-
+                logger.warning("MCP server '{}': streamableHttp transport not yet implemented, skipping", name)
+                await server_stack.aclose()
+                return name, None
             else:
                 logger.warning("MCP server '{}': unknown transport type '{}'", name, transport_type)
                 await server_stack.aclose()
@@ -208,15 +203,44 @@ async def connect_mcp_servers(mcp_servers: dict, registry: ToolRegistry):
 
             tools = await session.list_tools()
             registered_count = 0
+            enabled_tools = set(cfg.enabled_tools)
+            allow_all_tools = "*" in enabled_tools
+            matched_enabled_tools: set[str] = set()
             available_raw_names = [tool_def.name for tool_def in tools.tools]
-            available_wrapped_names = [_sanitize_name(f"mcp_{name}_{tool_def.name}") for tool_def in tools.tools]
-
+            available_wrapped_names = [f"mcp_{name}_{tool_def.name}" for tool_def in tools.tools]
             for tool_def in tools.tools:
-                wrapped_name = _sanitize_name(f"mcp_{name}_{tool_def.name}")
+                wrapped_name = f"mcp_{name}_{tool_def.name}"
+                if (
+                    not allow_all_tools
+                    and tool_def.name not in enabled_tools
+                    and wrapped_name not in enabled_tools
+                ):
+                    logger.debug(
+                        "MCP: skipping tool '{}' from server '{}' (not in enabledTools)",
+                        wrapped_name,
+                        name,
+                    )
+                    continue
                 wrapper = MCPToolWrapper(session, name, tool_def, time_out=cfg.tool_timeout)
                 registry.register(wrapper)
                 logger.debug("MCP: registered tool '{}' from server '{}'", wrapper.name, name)
                 registered_count += 1
+                if enabled_tools:
+                    if tool_def.name in enabled_tools:
+                        matched_enabled_tools.add(tool_def.name)
+                    if wrapped_name in enabled_tools:
+                        matched_enabled_tools.add(wrapped_name)
+            if enabled_tools and not allow_all_tools:
+                unmatched_enabled_tools = sorted(enabled_tools - matched_enabled_tools)
+                if unmatched_enabled_tools:
+                    logger.warning(
+                        "MCP server '{}': enabledTools entries not found: {}. Available raw names: {}. "
+                        "Available wrapped names: {}",
+                        name,
+                        ", ".join(unmatched_enabled_tools),
+                        ", ".join(available_raw_names) or "(none)",
+                        ", ".join(available_wrapped_names) or "(none)",
+                    )
 
             logger.info(
                 "MCP server '{}': connected, {} capabilities registered", name, registered_count
@@ -228,13 +252,19 @@ async def connect_mcp_servers(mcp_servers: dict, registry: ToolRegistry):
             return name, None
 
     server_stacks: dict[str, AsyncExitStack] = {}
+    tasks: list[asyncio.Task] = []
     for name, cfg in mcp_servers.items():
-        try:
-            result = await connect_server(name, cfg)
-        except Exception as e:
-            logger.exception("MCP server '{}' connection failed: {}", name, e)
-            continue
-        if result is not None and result[1] is not None:
+        task = asyncio.create_task(connect_server(name, cfg))
+        tasks.append(task)
+
+    results = await asyncio.gather(*tasks, return_exceptions=True)
+
+    for i, result in enumerate(results):
+        name = list(mcp_servers.keys())[i]
+        if isinstance(result, BaseException):
+            if not isinstance(result, asyncio.CancelledError):
+                logger.error("MCP server '{}' connection task failed: {}", name, result)
+        elif result is not None and result[1] is not None:
             server_stacks[result[0]] = result[1]
 
     return server_stacks
