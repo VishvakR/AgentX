@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, Awaitable, Callable
 from dataclasses import dataclass, field
 from loguru import logger
+from contextlib import AsyncExitStack
 
 from AgentX.bus import InboundMessage, MessageBus, OutboundMessage
 from AgentX.providers import LLMProvider
@@ -80,6 +81,7 @@ class AgentCoreLoop:
             model: str | None = None,
             max_iterations: int | None = None,
             max_tool_result_chars: int | None = None,
+            mcp_servers: dict | None = None,
             session_store: SessionStore | None = None,
             max_history_messages: int | None = None,
         ):
@@ -104,6 +106,10 @@ class AgentCoreLoop:
             else defaults.max_history_messages
         )
         self.tools = ToolRegistry()
+        self._mcp_servers = mcp_servers or {}
+        self._mcp_stacks: dict[str, AsyncExitStack] = {}
+        self._mcp_connected = False
+        self._mcp_connecting = False
         self._session_locks: dict[str, asyncio.Lock] = {}
 
         # Stream callbacks — set via set_stream_callbacks() for bus-driven mode.
@@ -125,6 +131,27 @@ class AgentCoreLoop:
         ) -> AgentCoreLoop:
         
         pass
+
+    async def _connect_mcp(self) -> None:
+        """Connect to configured MCP servers"""
+        if self._mcp_connected or self._mcp_connecting or not self._mcp_servers:
+            return
+        self._mcp_connecting = True
+        from AgentX.mcp.client import connect_mcp_servers
+        try:
+            self._mcp_stacks = await connect_mcp_servers(self._mcp_servers, self.tools)
+            if self._mcp_stacks:
+                self._mcp_connected = True
+            else:
+                logger.warning("No MCP servers connected successfully (will retry next message)")
+        except asyncio.CancelledError:
+            logger.warning("MCP connection cancelled (will retry next message)")
+            self._mcp_stacks.clear()
+        except BaseException as e:
+            logger.error("Failed to connect MCP servers (will retry next message): {}", e)
+            self._mcp_stacks.clear()
+        finally:
+            self._mcp_connecting = False
         
 
     def _build_initial_message(
@@ -182,6 +209,7 @@ class AgentCoreLoop:
         and the loop moves on to the next message.
         """
         self._running = True
+        await self._connect_mcp()
         logger.info("Agent loop started — waiting for inbound messages")
 
         try:
@@ -209,6 +237,7 @@ class AgentCoreLoop:
         except asyncio.CancelledError:
             pass
         finally:
+            await self._cleanup_mcp()
             self._running = False
             logger.info("Agent loop stopped")
 
@@ -216,6 +245,26 @@ class AgentCoreLoop:
         """Signal the bus-driven loop to stop after the current message."""
         self._running = False
         logger.info("Agent loop stop requested")
+
+    async def _cleanup_mcp(self) -> None:
+        """Close all MCP server connections and subprocesses."""
+        if not self._mcp_stacks:
+            return
+        for name, stack in list(self._mcp_stacks.items()):
+            try:
+                await stack.aclose()
+                logger.debug("Closed MCP server '{}'", name)
+            except RuntimeError as e:
+                # Known MCP SDK issue: anyio cancel scope conflict during cleanup.
+                # The server process is already terminated; this is benign.
+                if "cancel scope" in str(e):
+                    logger.debug("MCP server '{}' closed (anyio scope warning suppressed)", name)
+                else:
+                    logger.exception("Error closing MCP server '{}'", name)
+            except Exception:
+                logger.exception("Error closing MCP server '{}'", name)
+        self._mcp_stacks.clear()
+        self._mcp_connected = False
 
     @property
     def running(self) -> bool:
@@ -476,6 +525,7 @@ class AgentCoreLoop:
     ) -> OutboundMessage | None:
         """Process a message directly and return the outbound payload."""
         metadata: dict[str, Any] = {}
+        await self._connect_mcp()
 
         msg = InboundMessage(
             channel=channel, sender_id="user", chat_id=chat_id,
