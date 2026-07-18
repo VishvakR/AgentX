@@ -26,6 +26,8 @@ from AgentX.utils.helpers import sync_workspace_templates
 from AgentX.session import SessionStore
 from AgentX.config.schema import AgentDefaults
 from AgentX.cli.stream import StreamRenderer
+from AgentX.config.schema import mcp_servers, MCPServerConfig
+from AgentX.config.loader import load_mcp_servers
 
 app = typer.Typer(
     name="sara",
@@ -89,7 +91,8 @@ def _build_tools() -> ToolRegistry:
     registry = ToolRegistry()
     registry.register(WeatherTool())
     registry.register(WebSearchTool())
-    return registry
+    mcp_server = load_mcp_servers(mcp_servers)
+    return registry, mcp_server
 
 
 def _build_loop(
@@ -114,6 +117,7 @@ async def _run_single_message(
     loop: AgentCoreLoop,
     bus: MessageBus,
     tools: ToolRegistry,
+    mcp_servers: dict[str, MCPServerConfig],
     session_key: str,
     message: str,
     defaults: AgentDefaults,
@@ -128,6 +132,7 @@ async def _run_single_message(
 
     # Register tools and stream callbacks on the loop.
     loop.tools = tools
+    loop._mcp_servers = mcp_servers
     loop.set_stream_callbacks(
         on_stream=renderer.on_delta,
         on_stream_end=renderer.on_end,
@@ -191,6 +196,7 @@ async def _run_interactive(
     loop: AgentCoreLoop,
     bus: MessageBus,
     tools: ToolRegistry,
+    mcp_servers: dict[str, MCPServerConfig],
     store: SessionStore,
     session_key: str,
     defaults: AgentDefaults,
@@ -218,6 +224,7 @@ async def _run_interactive(
 
     # Register tools and stream callbacks on the loop.
     loop.tools = tools
+    loop._mcp_servers = mcp_servers
     loop.set_stream_callbacks(
         on_stream=_on_stream,
         on_stream_end=_on_stream_end,
@@ -410,18 +417,18 @@ def agent(
     sync_workspace_templates(defaults.workspace)
     bus = MessageBus()
     store = SessionStore(defaults.session_dir)
-    tools = _build_tools()
+    tools, mcp_servers = _build_tools()
     loop = _build_loop(defaults, bus, store)
 
     if message:
         # Single-message mode.
         asyncio.run(
-            _run_single_message(loop, bus, tools, session, message, defaults)
+            _run_single_message(loop, bus, tools, mcp_servers, session, message, defaults)
         )
     else:
         # Interactive mode.
         asyncio.run(
-            _run_interactive(loop, bus, tools, store, session, defaults)
+            _run_interactive(loop, bus, tools, mcp_servers, store, session, defaults)
         )
 
 
